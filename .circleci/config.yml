@@ -1,0 +1,49 @@
+version: 2.1
+orbs:
+  node: circleci/node@3.0.0
+  aws-s3: circleci/aws-s3@1.0.15
+jobs:
+  build_deploy:
+    executor:
+      name: node/default
+    steps:
+      - checkout
+      - run:
+          name: npm installation and check directory
+          command: |
+            npm install
+            pwd
+      - run:
+          name: remove node_modules
+          command: |
+            rm -rf node_modules/
+      - run:
+          name: Install aws cli and configure
+          command: |
+            curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+            sudo apt-get install -y build-essential
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+      - run: aws configure set aws_access_key_id ${AWS_ACCESS_KEY_ID}
+      - run: aws configure set aws_secret_access_key ${AWS_SECRET_ACCESS_KEY}
+      - run: aws configure set region ${AWS_REGION}
+      - run: pwd
+      - run: zip -r forgotPassword_function_payload.zip index.js    
+      - run: mkdir lambda_artifact
+      - run: mv forgotPassword_function_payload.zip lambda_artifact/ 
+      - aws-s3/sync:
+          from: lambda_artifact
+          to: "s3://${code_deploy_bucket}"
+      - run: ls -al
+      - run: aws lambda update-function-code --function-name forgotPassword --s3-bucket ${code_deploy_bucket} --s3-key forgotPassword_function_payload.zip
+workflows:
+  version: 2
+  build_deploy:
+    jobs:
+    - build_deploy:
+        filters:
+            branches:
+              only:
+                - master
